@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Client profile generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #EDF0EE; --paper: #FFFFFF; --ink: #1F2A2E; --muted: #5E6B6F; --line: #D6DCDB; --soft: #F4F6F5;
+  --network: #3B7556; --deficit: #A4650F; --growth: #2B5A8C; --alert: #9C3B2E;
+  --seg: var(--growth);
+  --sans: "Public Sans", "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #151A1C; --paper: #1E2528; --ink: #E5EBE9; --muted: #9BA8AA; --line: #34403F; --soft: #252D30;
+    --network: #6DB08A; --deficit: #D99B48; --growth: #7BA5D6; --alert: #E08A7C;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #151A1C; --paper: #1E2528; --ink: #E5EBE9; --muted: #9BA8AA; --line: #34403F; --soft: #252D30;
+  --network: #6DB08A; --deficit: #D99B48; --growth: #7BA5D6; --alert: #E08A7C;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+
+.app { max-width: 880px; margin: 0 auto; padding: 24px 20px 48px; }
+.top h1 { font: 600 22px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; }
+.top p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0 20px; }
+.btn, select {
+  font: 500 14px/1 var(--sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; min-height: 40px;
+}
+.btn { cursor: pointer; display: inline-flex; align-items: center; }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn:hover { border-color: var(--muted); }
+select { min-width: 220px; max-width: 100%; }
+.btn:focus-visible, select:focus-visible, .linkish:focus-visible { outline: 2px solid var(--growth); outline-offset: 2px; }
+.linkish { background: none; border: 0; color: var(--muted); text-decoration: underline; font: inherit; font-size: 14px; cursor: pointer; padding: 6px 2px; }
+#file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.err { color: var(--alert); font-size: 14px; margin: -8px 0 16px; }
+
+.sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 36px 40px; }
+.empty h2 { font: 600 18px/1.3 var(--sans); margin: 0 0 10px; }
+.empty ol { margin: 0 0 12px; padding-left: 20px; }
+.empty li { margin: 4px 0; }
+.empty p { color: var(--muted); margin: 8px 0 0; }
+
+.p-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+.p-org { font: 600 26px/1.15 var(--serif); margin: 0; }
+.p-date { color: var(--muted); font-size: 13px; }
+.p-meta { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+
+.segment { margin: 22px 0 18px; padding: 4px 0 4px 18px; border-left: 6px solid var(--seg); }
+.segment h2 { font: 600 34px/1.1 var(--serif); color: var(--seg); margin: 0; }
+.segment q { display: block; margin-top: 6px; color: var(--muted); font-style: italic; quotes: "\201C" "\201D"; }
+.segment .desc { margin: 8px 0 0; max-width: 68ch; }
+.note { margin: 8px 0 0; font-size: 14px; }
+
+.glance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.glance > div { padding: 14px 16px 14px 0; }
+.glance > div + div { padding-left: 16px; border-left: 1px solid var(--line); }
+.g-label { font-size: 13px; color: var(--muted); }
+.g-value { font-weight: 600; font-size: 17px; margin-top: 2px; }
+.g-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.dots { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: 1px; }
+.dots i { width: 11px; height: 11px; border-radius: 2px; border: 1.5px solid var(--seg); display: inline-block; }
+.dots i.on { background: var(--seg); }
+
+section.blk { margin-top: 24px; }
+section.blk h3 { font: 600 16px/1.3 var(--sans); margin: 0 0 8px; }
+.blk p { margin: 6px 0; }
+.blk ul, .blk ol { margin: 6px 0; padding-left: 20px; }
+.blk li { margin: 4px 0; }
+.flag { padding: 8px 0 8px 12px; border-left: 3px solid var(--alert); margin: 6px 0; }
+.flag b { display: block; }
+.muted { color: var(--muted); font-size: 13px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.ready-list { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+.ready-list li { margin: 0; }
+.ok { color: var(--seg); font-weight: 600; }
+.no { color: var(--muted); }
+.req { font-size: 12px; color: var(--muted); margin-left: 6px; }
+
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 13px; }
+td.dim { font-weight: 600; white-space: nowrap; width: 1%; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--soft); white-space: nowrap; }
+.badge.Ahead { color: var(--network); } .badge.Behind { color: var(--alert); }
+.foot { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .sheet { padding: 24px 18px; }
+  .glance { grid-template-columns: 1fr; }
+  .glance > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+  .two { grid-template-columns: 1fr; }
+  .segment h2 { font-size: 28px; }
+}
+@media print {
+  :root { color-scheme: light; --bg: #fff; --paper: #fff; --ink: #1F2A2E; --muted: #5E6B6F; --line: #D6DCDB; --soft: #F4F6F5;
+          --network: #3B7556; --deficit: #A4650F; --growth: #2B5A8C; --alert: #9C3B2E; padding: 0; }
+  @page { size: letter; margin: 0.5in; }
+  body { background: #fff; font-size: 12px; }
+  .top, .controls, .err { display: none !important; }
+  .app { padding: 0; max-width: none; }
+  .sheet { border: 0; padding: 0; }
+  section.blk, .flag, tr { break-inside: avoid; }
+  .segment h2 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Client profile generator</h1>
+    <p>For NGO staff only. Responses are read on this computer and are never uploaded.</p>
+  </header>
+
+  <div class="controls">
+    <label class="btn primary" for="file">Load responses (CSV)</label>
+    <input type="file" id="file" accept=".csv,text/csv">
+    <select id="client" aria-label="Choose a client" hidden></select>
+    <button class="btn" id="print" type="button" hidden>Save as PDF</button>
+    <button class="linkish" id="demo" type="button">Try it with sample clients</button>
+  </div>
+  <p class="err" id="err" role="alert" hidden></p>
+
+  <main class="sheet" id="out">
+    <div class="empty">
+      <h2>Load the questionnaire responses to build a client profile</h2>
+      <ol>
+        <li>Open the questionnaire's response sheet and select the <b>Form Responses 1</b> tab.</li>
+        <li>Choose <b>File</b>, then <b>Download</b>, then <b>Comma-separated values (.csv)</b>.</li>
+        <li>Click <b>Load responses (CSV)</b> above and pick that file, then choose a client.</li>
+      </ol>
+      <p>Each profile is a staff briefing: it tells you how to approach the client. Don't share it with the client as is.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ===== Profile generator engine: parsing, scoring rules (Part C), content ===== */
+
+const SEGMENTS = {
+  network: {
+    name: 'Network hirer', peers: 'network hirers', quote: 'I rely heavily on referrals for candidates.',
+    desc: 'Hires mainly through referrals and personal connections, trusting relationships and their own read on people. Often small, owner-run or place-based, they invest in training and promote from within.',
+    approach: 'Build on their instincts. Start with internal promotion and development, and reach them through people and groups they already trust.',
+    use: [
+      'Frame skills definitions as a way to get more consistent results from the judgment they already use.',
+      'Position skills-based practice as a promotion and development tool first, a hiring practice second.',
+      'Offer introductions that widen their candidate pool without replacing referrals.',
+    ],
+    avoid: ['Messages that suggest their judgment is wrong or needs correcting.'],
+    plays: ['upskill', 'connections', 'tools'],
+    starters: [
+      'Who referred your last few hires, and how did they work out?',
+      'When you promote someone, how do you decide they are ready?',
+    ],
+  },
+  deficit: {
+    name: 'Deficit-driven hirer', peers: 'deficit-driven hirers', quote: 'I have to work to sell my roles to whomever applies.',
+    desc: 'Works to fill roles that are hard to sell, often with thin applicant pools and limited HR capacity. Of the three mindsets, they face the slowest hiring and the highest early turnover.',
+    approach: 'Do it for them. Offer embedded or subsidized tools and shared HR help, and open with retention.',
+    use: [
+      'Lead with practical help that saves time: done-for-you setup, subsidized tools, shared services.',
+      'Connect skills definitions to keeping people longer, not just hiring them.',
+      'Build on tools they already use (often an HRIS) rather than adding new ones.',
+    ],
+    avoid: ['Training programs or workshops that ask for time and staff they do not have.'],
+    plays: ['hr', 'upskill', 'tools'],
+    starters: [
+      'Which role is hardest to fill, and what does someone need to succeed in it?',
+      'What happened with recent hires who left early?',
+    ],
+  },
+  growth: {
+    name: 'Growth hirer', peers: 'growth hirers', quote: 'I have developed my own specific processes (tools, techniques) to identify candidates.',
+    desc: 'Has built deliberate ways to find strong candidates and uses the most sourcing channels, assessment tools and hiring technology. The challenge is refining these practices and showing they work.',
+    approach: 'Help them refine and integrate. Offer evidence of quality and business impact, and invite them to share what works.',
+    use: [
+      'Position skills-based hiring as a competitive advantage and a driver of quality and retention.',
+      'Offer integration with the systems they already run (ATS, HRIS).',
+      'Invite them to share their scorecards or skills matrices as models for peers.',
+    ],
+    avoid: ['ROI pitches built on cost savings or reduced training; growth hirers value these least.'],
+    plays: ['tools', 'roi', 'peer'],
+    starters: [
+      'Which parts of your process do you trust most, and how do you know they work?',
+      'Where does your hiring process slow down or get stuck?',
+    ],
+  },
+};
+
+const PLAYS = {
+  tools: 'Skills list template plus a matched assessment',
+  connections: 'Introductions to community partners and workforce boards',
+  hr: 'Subsidized or shared HR services',
+  roi: 'Research brief on quality and retention outcomes',
+  upskill: 'Internal skills map for current staff (promotion and upskilling paths)',
+  peer: 'Invite them to share their scorecards as a peer model',
+};
+
+const C20_TO_PLAY = {
+  'Tools to define and assess the skills a role needs': 'tools',
+  'Connections to trusted partners who can widen my candidate pool': 'connections',
+  'Low-cost or subsidized HR services': 'hr',
+  'Evidence on the return on investment of hiring practices': 'roi',
+  'Help building promotion or upskilling paths for current staff': 'upskill',
+};
+
+const C17B_TOOL = {
+  'Assessing skills effectively': 'a work-sample task or matched assessment for one role',
+  'Defining the skills a role requires': 'a one-hour session to build a skills list for one role',
+  'Worry it will bring in weaker candidates': 'the candidate-choice evidence (a skills score beats a degree 64% of the time) and a one-role pilot',
+  'Limited awareness of skills-based hiring as a practice': 'a short primer with examples from similar employers',
+  'Resistance from hiring managers': 'a hiring-manager briefing built on the research evidence',
+  'Resistance from leadership or owners': 'an owner-facing brief on quality, retention and risk',
+  'Limited budget for new assessment tools': 'free or subsidized assessment options',
+  'Fitting it into our ATS or HR systems': 'hands-on help integrating with their current ATS or HRIS',
+  'Lack of internal resources or expertise': 'done-for-you setup or shared HR services',
+  'Legal concerns': 'guidance on job-related, structured assessment practices (refer legal questions to counsel)',
+  "Don't think it would make a difference": 'outcomes evidence on retention and quality of hire',
+};
+
+/* Peer benchmarks: % of each mindset (network, deficit, growth). Mindset More Than Size, 2026. */
+const BENCH = {
+  tech: [
+    ['Applicant tracking system (ATS)', 'ATS', [47, 54, 61]],
+    ['HR information system (HRIS)', 'HRIS', [55, 73, 71]],
+    ['Dedicated recruiting or talent management software', 'Recruiting software', [40, 54, 43]],
+    ['Spreadsheets', 'Spreadsheets', [66, 54, 69]],
+    ['Testing or assessment platform', 'Testing platform', [41, 47, 39]],
+    ['Paper or informal processes', 'Paper or informal', [49, 42, 32], 'unscored'],
+  ],
+  sourcing: [
+    ['Employee referrals', 'Employee referrals', [61, 50, 62]],
+    ['LinkedIn or other worker profile sites', 'LinkedIn or profile sites', [52, 57, 68]],
+    ['Job boards', 'Job boards', [48, 51, 62]],
+    ['Referrals from personal, professional or community networks', 'Personal or community referrals', [42, 40, 43]],
+    ['Company website', 'Company website', [41, 51, 55]],
+    ['Recruiters or recruiting firms', 'Recruiters', [38, 38, 50]],
+    ['Government workforce boards or curated candidate lists', 'Government workforce boards', [35, 35, 40]],
+    ['Contractor-to-full-time pipeline', 'Contractor pipeline', [11, 29, 21]],
+    ['Community organizations or nonprofits serving specific groups', 'Community nonprofits', [7, 6, 12]],
+    ['Social media posts', 'Social media', [5, 9, 12]],
+    ['Gig platforms (e.g., Fiverr)', 'Gig platforms', [0, 0, 1]],
+  ],
+  assessment: [
+    ['Reference checks', 'Reference checks', [63, 45, 62]],
+    ['Background checks', 'Background checks', [56, 47, 69]],
+    ['Structured interviews (same questions, scored)', 'Structured interviews', [46, 43, 56]],
+    ['Role-specific skills tests (e.g., coding, writing, task simulations)', 'Role-specific skills tests', [40, 45, 55]],
+    ['Soft or durable skills assessments', 'Soft skills assessments', [36, 38, 42]],
+    ['Work samples or assignments', 'Work samples', [31, 36, 40]],
+    ['Personality or culture-fit assessments', 'Personality or culture fit', [27, 38, 37]],
+    ['Cognitive ability tests', 'Cognitive ability tests', [27, 42, 36]],
+    ['Unstructured interviews', 'Unstructured interviews', [22, 21, 26], 'unscored'],
+    ['AI-based screening or assessment tools', 'AI screening tools', [12, 17, 25]],
+  ],
+  ai: [
+    ["It's built into tools we use", 'Embedded in tools', [34, 45, 53]],
+    ['Developing interview questions', 'Interview questions', [34, 49, 47]],
+    ['Writing job descriptions or candidate emails', 'Job descriptions or emails', [34, 44, 47]],
+    ['Parsing resumes', 'Resume parsing', [31, 41, 41]],
+    ['Conducting screening interviews', 'Screening interviews', [21, 37, 27], 'decision'],
+    ['Ranking applicants', 'Ranking applicants', [8, 10, 24], 'decision'],
+  ],
+  attitudes: [
+    ['I really only trust referrals for candidates.', 'Only trust referrals', [58, 72, 34]],
+    ['My personal assessment and knowledge of the role matter more than formal hiring processes.', 'Personal assessment over formal process', [79, 77, 73]],
+    ['My most important qualification is that a candidate fits in with the team.', 'Team fit is most important', [82, 75, 77]],
+    ['I often fit a role to the candidate I like best.', 'Fit role to the candidate I like', [68, 72, 52]],
+    ['I expect to train new hires rather than hire someone who can already do the job.', 'Expect to train new hires', [68, 79, 64]],
+    ['Removing degree requirements would improve my hiring outcomes.', 'Removing degrees would help', [56, 58, 57]],
+  ],
+  challenges: [
+    ['Assessing skills effectively', 'Assessing skills', [35, 27, 46]],
+    ['Defining the skills a role requires', 'Defining required skills', [32, 42, 41]],
+    ['Worry it will bring in weaker candidates', 'Worry about weaker candidates', [32, 38, 30]],
+    ['Limited awareness of skills-based hiring as a practice', 'Limited awareness', [26, 37, 28]],
+    ['Resistance from hiring managers', 'Hiring manager resistance', [23, 35, 32]],
+    ['Resistance from leadership or owners', 'Leadership resistance', [18, 34, 25]],
+    ['Limited budget for new assessment tools', 'Limited budget', [21, 25, 24]],
+    ['Fitting it into our ATS or HR systems', 'ATS or HR integration', [18, 25, 34]],
+    ['Lack of internal resources or expertise', 'Internal resources or expertise', [14, 25, 26]],
+    ['Legal concerns', 'Legal concerns', [9, 13, 17]],
+    ["Don't think it would make a difference", "Won't make a difference", [6, 7, 9]],
+  ],
+  context: { confident: [96, 91, 96], definesRoles: [40, 37, 58], earlyTurnover: [31, 38, 13], fastHire: [45, 21, 45] },
+};
+const SEG_INDEX = { network: 0, deficit: 1, growth: 2 };
+
+const C11_MEASURES = [
+  'Structured interviews (same questions, scored)',
+  'Role-specific skills tests (e.g., coding, writing, task simulations)',
+  'Work samples or assignments',
+  'Soft or durable skills assessments',
+];
+const C14_CORRECT = [
+  'Evaluating candidates on demonstrated skills',
+  'Using work samples, tasks or assessments',
+  'Placing less emphasis on degrees',
+  'Focusing on whether candidates can do the specific tasks of the role',
+];
+const C14_WRONG = [
+  "Hiring people who fit the team's culture or personality",
+  'Prioritizing relevant job titles or years of experience',
+  'Hiring people who are productive immediately without training',
+  'Not sure',
+];
+const REFERRAL_SOURCES = ['Employee referrals', 'Referrals from personal, professional or community networks'];
+const OPTIONS = {
+  C10: BENCH.sourcing.map(r => r[0]),
+  C11: BENCH.assessment.map(r => r[0]).concat(['None of these']),
+  C12: BENCH.tech.map(r => r[0]),
+  C14: C14_CORRECT.concat(C14_WRONG),
+  C17: BENCH.challenges.map(r => r[0]).concat(['None of these']),
+  C18: ['Not at this time'].concat(BENCH.ai.map(r => r[0])),
+  C20: Object.keys(C20_TO_PLAY),
+};
+
+/* ---------- CSV parsing ---------- */
+function parseCSV(text) {
+  const rows = []; let row = []; let field = ''; let q = false;
+  text = text.replace(/^\uFEFF/, '');
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+
+/* Split a checkbox cell into known options; leftover text is treated as "Other". */
+function splitMulti(cell, options) {
+  let rest = ', ' + (cell || '') + ', ';
+  const found = [];
+  options.slice().sort((a, b) => b.length - a.length).forEach(o => {
+    const token = ', ' + o + ', ';
+    if (rest.includes(token)) { found.push(o); rest = rest.replace(token, ', '); }
+  });
+  const other = rest.split(', ').map(s => s.trim()).filter(Boolean).join(', ');
+  return { items: found, other: other };
+}
+
+/* Turn a CSV (header + rows) into response records keyed by question code. */
+function readResponses(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) throw new Error('This file has no responses. Download the "Form Responses 1" tab as a CSV and try again.');
+  const header = rows[0];
+  const col = {}; const grid = [];
+  header.forEach((h, i) => {
+    const m = h.match(/^(C\d+[a-z]?)\.\s/);
+    if (!m) { if (/^timestamp$/i.test(h.trim())) col.Timestamp = i; return; }
+    if (m[1] === 'C9') grid.push({ i: i, text: (h.match(/\[(.*)\]\s*$/) || [])[1] || '' });
+    else col[m[1]] = i;
+  });
+  if (col.C8 === undefined) throw new Error('This file is missing question C8 (the mindset question). Check that you downloaded the "Form Responses 1" tab from the questionnaire response sheet.');
+  return rows.slice(1).map((r, n) => {
+    const get = k => (col[k] !== undefined ? (r[col[k]] || '').trim() : '');
+    const rec = { row: n + 2 };
+    Object.keys(col).forEach(k => { rec[k] = get(k); });
+    rec.C9 = BENCH.attitudes.map(a => {
+      const g = grid.find(x => x.text.trim() === a[0]) || null;
+      return g ? (r[g.i] || '').trim() : '';
+    });
+    return rec;
+  });
+}
+
+/* ---------- Scoring (Part C, Steps 1–7) ---------- */
+const AGREE = v => v === 'Agree' || v === 'Strongly agree';
+const DISAGREE = v => v === 'Disagree' || v === 'Strongly disagree';
+
+function segmentOf(c8) {
+  if (/^I rely heavily/i.test(c8)) return 'network';
+  if (/^I have to work to sell/i.test(c8)) return 'deficit';
+  if (/^I have developed/i.test(c8)) return 'growth';
+  return null;
+}
+
+function compareDimension(rows, selected, answered, si) {
+  if (!answered) return { rating: 'Not answered', ahead: [], behind: [] };
+  const ahead = []; const behind = [];
+  rows.forEach(([opt, label, pct, flag]) => {
+    if (flag === 'unscored') return;
+    const p = pct[si]; const uses = selected.includes(opt);
+    if (!uses && p >= 50) behind.push({ label, p });
+    if (uses && p < 30) ahead.push({ label, p });
+  });
+  const rating = ahead.length > behind.length ? 'Ahead' : behind.length > ahead.length ? 'Behind' : 'In line';
+  return { rating, ahead, behind };
+}
+
+function buildProfile(rec) {
+  const seg = segmentOf(rec.C8 || '');
+  const P = { rec, seg, org: rec.C0a || '(No organization name)', notes: [] };
+  if (!seg) { P.error = 'C8 (the mindset question) is blank or unrecognized. Ask it in the intake call, then generate the profile.'; return P; }
+  const S = SEGMENTS[seg]; const si = SEG_INDEX[seg];
+  P.segment = S;
+
+  const m = {};
+  ['C10', 'C11', 'C12', 'C14', 'C17', 'C18', 'C20'].forEach(k => { m[k] = splitMulti(rec[k], OPTIONS[k]); });
+  ['C11', 'C17'].forEach(k => { if (m[k].items.length > 1) m[k].items = m[k].items.filter(x => x !== 'None of these'); });
+  P.multi = m;
+
+  // Step 1: mixed-signal note
+  const referralsOnly = m.C10.items.length > 0 && !m.C10.other && m.C10.items.every(x => REFERRAL_SOURCES.includes(x));
+  if (seg === 'growth' && AGREE(rec.C9[0]) && referralsOnly) {
+    P.notes.push('Growth hirer who also leans on referrals. Ask when they use each approach.');
+  }
+
+  // Step 2: audience lens
+  const role = rec.C1 || '';
+  const big = rec.C2 === '250–499';
+  if (/^Company owner/.test(role) || /^Hiring manager/.test(role)) {
+    P.lens = {
+      title: /^Company owner/.test(role) ? 'Owner' : 'Hiring manager',
+      text: 'Expect more skepticism than from HR. Lead with the candidate-choice evidence (a skills score beats a four-year degree 64% of the time) before asking for changes.' +
+        (big ? ' At this size, also address fear of weaker candidates and legal defensibility, and ask who uses AI to screen.' : ''),
+    };
+  } else if (/^HR/.test(role)) {
+    P.lens = { title: 'HR', text: 'Treat as an ally who may lack authority. Help them make the case to owners and claim a role in decisions about AI tools.' };
+  } else {
+    P.lens = { title: role ? 'Other role' : 'Role not given', text: 'Confirm who makes hiring decisions before tailoring the pitch.' };
+  }
+
+  // Step 3: readiness
+  const pts = [
+    { label: 'Knows the concept', ok: m.C14.items.some(x => C14_CORRECT.includes(x)) && !m.C14.items.some(x => C14_WRONG.includes(x)) },
+    { label: 'Defines roles by skills', ok: /^Yes/.test(rec.C15 || '') },
+    { label: 'Degree requirements open', ok: rec.C16 === 'No' || /^Yes, and we have reviewed/.test(rec.C16 || '') },
+    { label: 'Measures skills', ok: m.C11.items.some(x => C11_MEASURES.includes(x)) },
+  ];
+  const score = pts.filter(p => p.ok).length;
+  P.readiness = {
+    pts, score,
+    level: score <= 1 ? 'Skills-aware' : score <= 3 ? 'Emerging' : 'Skills-first',
+    step: score <= 1 ? 'Write a skills list for one hard-to-fill role.'
+      : score <= 3 ? 'Add one assessment tied to that skills list, and review one degree requirement.'
+        : 'Refine scorecards and start tracking outcomes (retention, time to productivity).',
+  };
+
+  // Step 4: flags
+  const f = [];
+  const confident = /agree$/i.test(rec.C13 || '') && !/disagree/i.test(rec.C13 || '');
+  if (confident && !pts[3].ok) f.push(['Confidence gap', 'The client trusts methods that may not measure skills. Don\'t correct them; offer a tool that makes their judgment more consistent.']);
+  if (rec.C7c === 'Yes') f.push(['Early turnover', 'Their most recent hire left within six months. Open with retention' + (seg === 'deficit' ? ', the strongest hook for this segment.' : '.')]);
+  if (rec.C7a === 'Over 90') f.push(['Slow hire', 'Their last hire took over 90 days. Offer efficiency help before new practices.']);
+  if (rec.C7b === 'Under 10' || referralsOnly) f.push(['Thin pipeline', 'Few applicants or referral-only sourcing. Offer intermediary connections to widen the pool.']);
+  const aiDecision = m.C18.items.filter(x => x === 'Conducting screening interviews' || x === 'Ranking applicants');
+  if (aiDecision.length) {
+    f.push(['AI decision risk', 'AI is used for ' + aiDecision.map(x => x.toLowerCase()).join(' and ') + '. Discuss human review and an AI-use policy.']);
+    if (rec.C19 !== 'HR') f.push(['AI governance gap', 'High priority: AI decisions are set by ' + (rec.C19 ? rec.C19.toLowerCase() : 'no one named') + ', so they may be happening outside HR\'s view.']);
+  }
+  P.flags = f.map(([t, x]) => ({ title: t, text: x }));
+  P.flagNote = 'Turnover, speed and pipeline flags describe one hire. Treat them as conversation starters, not diagnoses.';
+
+  // Step 5: messaging (use / avoid), skipping lines the segment defaults already cover
+  const msg = [];
+  if (AGREE(rec.C9[2]) || AGREE(rec.C9[3])) msg.push({ kind: 'use', text: 'Frame skills definitions as a way to make fit judgments fairer and more consistent.' });
+  if (AGREE(rec.C9[1])) msg.push({ kind: 'avoid', text: 'Process-heavy pitches. Offer one lightweight tool instead.' });
+  if (AGREE(rec.C9[4]) && seg !== 'network') msg.push({ kind: 'use', text: 'Upskilling and internal promotion are a natural entry point.' });
+  if (AGREE(rec.C9[0]) && seg !== 'network') msg.push({ kind: 'use', text: 'Work through people and groups they already trust.' });
+  if (DISAGREE(rec.C9[5])) msg.push({ kind: 'use', text: 'Lead with evidence before asking them to change job postings.' });
+  P.messaging = msg;
+
+  // Step 6: plays
+  const requested = m.C20.items.map(x => C20_TO_PLAY[x]);
+  const priority = S.plays.concat(Object.keys(PLAYS).filter(k => !S.plays.includes(k)));
+  requested.sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
+  const order = requested.concat(S.plays.filter(p => !requested.includes(p)));
+  P.plays = order.slice(0, 3).map(k => ({
+    key: k,
+    text: k === 'roi' && seg === 'growth' ? PLAYS.roi + ' (focus on quality, not cost savings)' : PLAYS[k],
+    requested: requested.includes(k),
+  }));
+  P.startWith = rec.C17b ? { challenge: rec.C17b, tool: C17B_TOOL[rec.C17b] || '' } : null;
+
+  // Step 7: peer comparison
+  P.compare = {
+    tech: compareDimension(BENCH.tech, m.C12.items, m.C12.items.length > 0, si),
+    sourcing: compareDimension(BENCH.sourcing, m.C10.items, m.C10.items.length > 0 || !!m.C10.other, si),
+    assessment: compareDimension(BENCH.assessment, m.C11.items, !!rec.C11, si),
+  };
+  const aiUses = m.C18.items.filter(x => x !== 'Not at this time');
+  const expected = BENCH.ai.reduce((s, r) => s + r[2][si], 0) / 100;
+  const aiAnswered = m.C18.items.length > 0;
+  P.compare.ai = {
+    answered: aiAnswered,
+    uses: aiUses.length, expected: Math.round(expected * 10) / 10,
+    rating: !aiAnswered ? 'Not answered' : aiUses.length >= expected + 1 ? 'More use' : aiUses.length <= expected - 1 ? 'Less use' : 'Similar use',
+    decision: BENCH.ai.filter(r => r[3] === 'decision').map(r => ({ label: r[1], uses: aiUses.includes(r[0]), p: r[2][si] })),
+    none: m.C18.items.includes('Not at this time') && !aiUses.length,
+    noneP: [31, 7, 18][si],
+  };
+  P.compare.attitudes = BENCH.attitudes.map((a, i) => {
+    const v = rec.C9[i]; const p = a[2][si];
+    if (DISAGREE(v) && p >= 60) return { label: a[1], text: 'Disagrees, while ' + p + '% of peers agree.' };
+    if (AGREE(v) && p < 40) return { label: a[1], text: 'Agrees, while only ' + p + '% of peers do.' };
+    return null;
+  }).filter(Boolean);
+  P.compare.challenges = BENCH.challenges.filter(c => m.C17.items.includes(c[0]) && c[2][si] < 20)
+    .map(c => ({ label: c[1], p: c[2][si] }));
+
+  const ctx = BENCH.context;
+  P.context = [
+    { label: 'Confident in their skills assessment', client: rec.C13 || 'Not answered', peers: ctx.confident[si] + '% agree' },
+    { label: 'Defines roles by skills', client: rec.C15 || 'Not answered', peers: ctx.definesRoles[si] + '% do' },
+    { label: 'Recent hire left within 6 months', client: rec.C7c || 'Not answered', peers: ctx.earlyTurnover[si] + '% of new hires leave early' },
+    { label: 'Days from posting to offer', client: rec.C7a || 'Not answered', peers: ctx.fastHire[si] + '% close in under 30 days' },
+  ];
+
+  // Conversation starters
+  const fs = {
+    'Confidence gap': 'Walk me through how you knew your last hire could do the job.',
+    'AI governance gap': 'Who decided how AI is used in screening, and who reviews what it decides?',
+    'AI decision risk': 'When AI screens or ranks candidates, who checks its results?',
+    'Early turnover': 'What led your most recent hire to leave?',
+    'Thin pipeline': 'Where would you look if your usual sources came up empty?',
+  };
+  const titles = P.flags.map(x => x.title);
+  const starters = titles.filter(t => !(t === 'AI decision risk' && titles.includes('AI governance gap')))
+    .map(t => fs[t]).filter(Boolean).slice(0, 2);
+  P.starters = starters.concat(S.starters).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3);
+  return P;
+}
+
+if (typeof module !== 'undefined') module.exports = { readResponses, buildProfile, parseCSV, splitMulti };
+
+const DEMO_CSV = "Timestamp,C0a. Organization name,C0b. Your name and email (optional),C1. What best describes your role?,C2. About how many full-time employees work at your organization?,C3. What type of organization is it?,C4. Industry,C5. Do some or all of your staff need to live within commuting distance of a workplace?,\"C6. About how many people do you hire per year (full-time, part-time or contract)?\",C7a. Thinking about your most recent hire: how many days from posting to accepted offer?,C7b. Most recent hire: about how many applicants?,C7c. Most recent hire: did this person leave within 6 months?,C8. Which ONE of these best describes you?,C9. How much do you agree with each statement? [I really only trust referrals for candidates.],C9. How much do you agree with each statement? [My personal assessment and knowledge of the role matter more than formal hiring processes.],C9. How much do you agree with each statement? [My most important qualification is that a candidate fits in with the team.],C9. How much do you agree with each statement? [I often fit a role to the candidate I like best.],C9. How much do you agree with each statement? [I expect to train new hires rather than hire someone who can already do the job.],C9. How much do you agree with each statement? [Removing degree requirements would improve my hiring outcomes.],C10. How do you find candidates? Select all that apply.,C11. Which tools do you use to assess candidates? Select all that apply.,C12. Which systems do you use to manage hiring? Select all that apply.,\"C13. \"\"I am confident in my organization's ability to assess candidates' skills with our current tools.\"\"\",C14. Which of these describe skills-based hiring? Select all that apply.,C15. Do you write down a list of the skills each role requires and use it to evaluate candidates?,C16. Do your job postings require a four-year degree?,C17. What do you think are the biggest challenges in using skills-based hiring? Select all that apply.,C17b. Which ONE of those is your biggest challenge?,C18. Do you use AI in hiring? Select all that apply.,\"C19. If AI helps make hiring decisions, who decides how it is used?\",C20. Which would be most useful to you? Select all that apply.\r\n11/22/2026 9:10:00,Rivera Landscaping,Luis Rivera,Company owner or principal,Fewer than 10,Sole proprietorship or partnership,Landscaping,\"Yes, all of them\",3\u20135,30\u201390,Under 10,No,I rely heavily on referrals for candidates.,Strongly agree,Strongly agree,Agree,Agree,Agree,Neutral,\"Employee referrals, Referrals from personal, professional or community networks\",\"Reference checks, Unstructured interviews\",\"Spreadsheets, Paper or informal processes\",Strongly agree,\"Evaluating candidates on demonstrated skills, Hiring people who fit the team's culture or personality\",No,No,\"Assessing skills effectively, Defining the skills a role requires\",Defining the skills a role requires,Not at this time,Not applicable,Connections to trusted partners who can widen my candidate pool\r\n11/22/2026 10:02:00,Harbor Logistics,Dana Kim,HR manager or HR staff,100\u2013249,Corporation,Transportation and warehousing,\"Yes, all of them\",10\u201399,Over 90,10\u201399,Yes,I have to work to sell my roles to whomever applies.,Agree,Neutral,Neutral,Agree,Strongly agree,Disagree,\"LinkedIn or other worker profile sites, Job boards, Company website, Contractor-to-full-time pipeline\",\"Background checks, Cognitive ability tests, Structured interviews (same questions, scored)\",HR information system (HRIS),Somewhat agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for some roles\",\"Yes, but we have not reviewed it in a while\",\"Limited budget for new assessment tools, Lack of internal resources or expertise, Resistance from leadership or owners\",Lack of internal resources or expertise,\"Developing interview questions, Conducting screening interviews\",Individual hiring managers,\"Low-cost or subsidized HR services, Help building promotion or upskilling paths for current staff\"\r\n11/22/2026 11:30:00,Brightline Analytics,Sam Ortiz,Hiring manager (not in HR),250\u2013499,Corporation,Professional services,No,10\u201399,Under 30,100\u2013500,No,\"I have developed my own specific processes (tools, techniques) to identify candidates.\",Disagree,Agree,Agree,Disagree,Neutral,Agree,\"Employee referrals, LinkedIn or other worker profile sites, Job boards, Company website, Recruiters or recruiting firms, Social media posts\",\"Background checks, Reference checks, Structured interviews (same questions, scored), Role-specific skills tests (e.g., coding, writing, task simulations), Work samples or assignments, AI-based screening or assessment tools\",\"Applicant tracking system (ATS), HR information system (HRIS), Spreadsheets, Testing or assessment platform\",Strongly agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for all roles\",No,\"Assessing skills effectively, Fitting it into our ATS or HR systems, Legal concerns\",Fitting it into our ATS or HR systems,\"It's built into tools we use, Parsing resumes, Ranking applicants\",HR,\"Evidence on the return on investment of hiring practices, Tools to define and assess the skills a role needs\"\r\n";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let records = [];
+
+function showError(msg) { const e = $('err'); e.textContent = msg; e.hidden = !msg; }
+
+function load(text) {
+  try {
+    records = readResponses(text);
+  } catch (e) { showError(e.message); return; }
+  showError('');
+  const sel = $('client');
+  sel.innerHTML = records.map((r, i) =>
+    '<option value="' + i + '">' + esc(r.C0a || 'Row ' + r.row) + (r.Timestamp ? ' (' + esc(r.Timestamp.split(' ')[0]) + ')' : '') + '</option>').join('');
+  sel.hidden = false; $('print').hidden = false;
+  sel.value = String(records.length - 1);
+  render();
+}
+
+function list(items) { return '<ul>' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>'; }
+
+function compareRow(name, c, peers) {
+  let d = [];
+  if (c.rating === 'Not answered') d.push('<span class="muted">Not answered.</span>');
+  if (c.behind.length) d.push('Not using what most ' + peers + ' use: ' + c.behind.map(x => esc(x.label) + ' (' + x.p + '%)').join(', ') + '.');
+  if (c.ahead.length) d.push('Uses what few ' + peers + ' use: ' + c.ahead.map(x => esc(x.label) + ' (' + x.p + '%)').join(', ') + '.');
+  if (!d.length) d.push('Matches the common practices of ' + peers + '.');
+  return '<tr><td class="dim">' + name + '</td><td><span class="badge ' + c.rating.replace(' ', '') + '">' + c.rating + '</span></td><td>' + d.join(' ') + '</td></tr>';
+}
+
+function render() {
+  const rec = records[Number($('client').value)];
+  if (!rec) return;
+  const P = buildProfile(rec);
+  const out = $('out');
+  if (P.error) {
+    out.innerHTML = '<div class="empty"><h2>' + esc(P.org) + '</h2><p>' + esc(P.error) + '</p></div>';
+    return;
+  }
+  const S = P.segment; const peers = S.peers;
+  document.documentElement.style.setProperty('--seg', 'var(--' + P.seg + ')');
+  const meta = [rec.C1, rec.C2 ? rec.C2 + ' employees' : '', rec.C4].filter(Boolean).map(esc).join(', ');
+  const today = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const dots = '<span class="dots" aria-hidden="true">' + [0, 1, 2, 3].map(i => '<i class="' + (i < P.readiness.score ? 'on' : '') + '"></i>').join('') + '</span>';
+  const ai = P.compare.ai;
+  let aiText = ai.answered
+    ? (ai.none ? 'No AI use in hiring (' + ai.noneP + '% of ' + peers + ' say the same).' : 'Uses AI for ' + ai.uses + ' hiring task' + (ai.uses === 1 ? '' : 's') + '; ' + peers + ' average ' + ai.expected + '.')
+    : '<span class="muted">Not answered.</span>';
+  const dec = ai.decision.filter(d => d.uses).map(d => 'Uses AI for ' + d.label.toLowerCase() + ' (' + d.p + '% of ' + peers + ' do).');
+  if (dec.length) aiText += ' <b>' + dec.join(' ') + '</b>';
+
+  const stand = P.compare.attitudes.map(a => esc(a.label) + ': ' + esc(a.text))
+    .concat(P.compare.challenges.map(c => 'Reports "' + esc(c.label.toLowerCase()) + '" as a challenge, which only ' + c.p + '% of ' + peers + ' do.'));
+
+  out.innerHTML =
+    '<div class="p-head"><h1 class="p-org">' + esc(P.org) + '</h1><span class="p-date">Profile generated ' + esc(today) + '</span></div>' +
+    (meta ? '<p class="p-meta">' + meta + '</p>' : '') +
+    '<div class="segment"><h2>' + S.name + '</h2><q>' + esc(S.quote) + '</q><p class="desc">' + esc(S.desc) + '</p>' +
+      P.notes.map(n => '<p class="note">' + esc(n) + '</p>').join('') + '</div>' +
+
+    '<div class="glance">' +
+      '<div><div class="g-label">Skills-first readiness</div><div class="g-value">' + dots + P.readiness.score + ' of 4, ' + P.readiness.level.toLowerCase() + '</div></div>' +
+      '<div><div class="g-label">Who you are talking to</div><div class="g-value">' + esc(P.lens.title) + '</div></div>' +
+      '<div><div class="g-label">Flags to raise</div><div class="g-value">' + (P.flags.length || 'None') + '</div></div>' +
+    '</div>' +
+
+    '<section class="blk"><h3>How to approach this client</h3><p>' + S.approach + '</p><p>' + esc(P.lens.text) + '</p>' +
+      '<div class="two"><div><b>Messages to use</b>' + list(S.use.concat(P.messaging.filter(m => m.kind === 'use').map(m => m.text)).map(esc)) + '</div>' +
+      '<div><b>Avoid</b>' + list(S.avoid.concat(P.messaging.filter(m => m.kind === 'avoid').map(m => m.text)).map(esc)) + '</div></div></section>' +
+
+    (P.flags.length ? '<section class="blk"><h3>Flags to raise</h3>' +
+      P.flags.map(f => '<div class="flag"><b>' + esc(f.title) + '</b>' + esc(f.text) + '</div>').join('') +
+      '<p class="muted">' + esc(P.flagNote) + '</p></section>' : '') +
+
+    '<section class="blk"><h3>Skills-first readiness</h3><ul class="ready-list">' +
+      P.readiness.pts.map(p => '<li><span class="' + (p.ok ? 'ok' : 'no') + '">' + (p.ok ? '\u2713' : '\u2013') + '</span> ' + p.label + '</li>').join('') +
+      '</ul><p><b>First step:</b> ' + esc(P.readiness.step) + '</p></section>' +
+
+    '<section class="blk"><h3>First three plays</h3><ol>' +
+      P.plays.map(p => '<li>' + esc(p.text) + (p.requested ? '<span class="req">client asked for this</span>' : '') + '</li>').join('') + '</ol>' +
+      (P.startWith ? '<p><b>Start with:</b> their biggest challenge is \u201C' + esc(P.startWith.challenge) + '.\u201D Lead with ' + esc(P.startWith.tool) + '.</p>' : '') +
+    '</section>' +
+
+    '<section class="blk"><h3>Compared with other ' + peers + '</h3><div class="tbl-wrap"><table>' +
+      '<thead><tr><th>Area</th><th>Rating</th><th>Details</th></tr></thead><tbody>' +
+      compareRow('Hiring technology', P.compare.tech, peers) +
+      compareRow('Sourcing', P.compare.sourcing, peers) +
+      compareRow('Assessment', P.compare.assessment, peers) +
+      '<tr><td class="dim">AI use</td><td><span class="badge">' + ai.rating + '</span></td><td>' + aiText + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<p><b>Where they stand apart:</b> ' + (stand.length ? '</p>' + list(stand) : 'attitudes and challenges are in line with peers.</p>') +
+      '<div class="tbl-wrap"><table><thead><tr><th>Context</th><th>This client</th><th>' + S.name + 's</th></tr></thead><tbody>' +
+      P.context.map(c => '<tr><td>' + c.label + '</td><td>' + esc(c.client) + '</td><td>' + c.peers + '</td></tr>').join('') +
+      '</tbody></table></div></section>' +
+
+    '<section class="blk"><h3>Conversation starters</h3>' + list(P.starters.map(esc)) + '</section>' +
+
+    '<div class="foot">Staff briefing, not for distribution to the client. Peer benchmarks: Welsh, Son &amp; Stoddard, <i>Mindset More Than Size</i>, Northeastern University Workforce Transformation Lab, 2026 (n = 1,200 SMBs).</div>';
+}
+
+$('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => load(String(r.result));
+  r.onerror = () => showError('This file could not be read. Download the response sheet as a CSV and try again.');
+  r.readAsText(f);
+  e.target.value = '';
+});
+$('client').addEventListener('change', render);
+$('print').addEventListener('click', () => window.print());
+$('demo').addEventListener('click', () => load(DEMO_CSV));
+</script>
+</body>
+</html>
