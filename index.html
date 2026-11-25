@@ -151,7 +151,7 @@ table.tech td.num.hit { background: var(--soft); color: var(--ink); font-weight:
     <div class="empty">
       <h2>Load the questionnaire responses to build a client profile</h2>
       <ol>
-        <li>Open the questionnaire's response sheet and select the <b>Form Responses 1</b> tab.</li>
+        <li>Open the questionnaire's response sheet and select the <b>Form Response</b> tab.</li>
         <li>Choose <b>File</b>, then <b>Download</b>, then <b>Comma-separated values (.csv)</b>.</li>
         <li>Click <b>Load responses (CSV)</b> above and pick that file, then choose a client.</li>
       </ol>
@@ -299,12 +299,12 @@ const BENCH = {
     ['Ranking applicants', 'Ranking applicants', [8, 10, 24], 'decision'],
   ],
   attitudes: [
-    ['I really only trust referrals for candidates.', 'Only trust referrals', [58, 72, 34]],
-    ['My personal assessment and knowledge of the role matter more than formal hiring processes.', 'Personal assessment over formal process', [79, 77, 73]],
+    ['I really only trust referrals for candidates.', 'Only trust referrals', [58, 72, 33]],
+    ['My personal assessment and knowledge of the role matter more than formal hiring processes.', 'Personal assessment over formal process', [78, 77, 73]],
     ['My most important qualification is that a candidate fits in with the team.', 'Team fit is most important', [82, 75, 77]],
     ['I often fit a role to the candidate I like best.', 'Fit role to the candidate I like', [68, 72, 52]],
     ['I expect to train new hires rather than hire someone who can already do the job.', 'Expect to train new hires', [68, 79, 64]],
-    ['Removing degree requirements would improve my hiring outcomes.', 'Removing degrees would help', [56, 58, 57]],
+    ['Removing degree requirements would improve my hiring outcomes.', 'Removing degrees would help', [57, 58, 57]],
   ],
   challenges: [
     ['Assessing skills effectively', 'Assessing skills', [35, 27, 46]],
@@ -319,7 +319,9 @@ const BENCH = {
     ['Legal concerns', 'Legal concerns', [9, 13, 17]],
     ["Don't think it would make a difference", "Won't make a difference", [6, 7, 9]],
   ],
-  context: { confident: [96, 91, 96], definesRoles: [40, 37, 58], earlyTurnover: [31, 38, 13], fastHire: [45, 21, 45] },
+  /* Challenges: corrected Q27 chart (replaces Figure 30 in the report). */
+  noChallenges: [11, 3, 10],
+  context: { confident: [96, 91, 96], definesRoles: [40, 37, 58], earlyTurnover: [31, 38, 13], fastHire: [45, 21, 41] },
 };
 const SEG_INDEX = { network: 0, deficit: 1, growth: 2 };
 
@@ -413,7 +415,7 @@ function splitMulti(cell, options) {
 /* Turn a CSV (header + rows) into response records keyed by question code. */
 function readResponses(text) {
   const rows = parseCSV(text);
-  if (rows.length < 2) throw new Error('This file has no responses. Download the "Form Responses 1" tab as a CSV and try again.');
+  if (rows.length < 2) throw new Error('This file has no responses. Download the "Form Response" tab as a CSV and try again.');
   const header = rows[0];
   const col = {}; const grid = []; const techGrid = [];
   header.forEach((h, i) => {
@@ -424,7 +426,7 @@ function readResponses(text) {
     else if (m[1] === 'C12' && bracket) { const k = techIndex(bracket); if (k >= 0) techGrid.push({ i: i, k: k }); }
     else col[m[1]] = i;
   });
-  if (col.C8 === undefined) throw new Error('This file is missing question C8 (the mindset question). Check that you downloaded the "Form Responses 1" tab from the questionnaire response sheet.');
+  if (col.C8 === undefined) throw new Error('This file is missing question C8 (the mindset question). Check that you downloaded the "Form Response" tab from the questionnaire response sheet.');
   return rows.slice(1).map((r, n) => {
     const get = k => (col[k] !== undefined ? (r[col[k]] || '').trim() : '');
     const rec = { row: n + 2 };
@@ -587,6 +589,7 @@ function buildProfile(rec) {
   }).filter(Boolean);
   P.compare.challenges = BENCH.challenges.filter(c => m.C17.items.includes(c[0]) && c[2][si] < 20)
     .map(c => ({ label: c[1], p: c[2][si] }));
+  P.compare.noChallenges = m.C17.items.length === 1 && m.C17.items[0] === 'None of these' ? BENCH.noChallenges[si] : null;
 
   const ctx = BENCH.context;
   P.context = [
@@ -744,7 +747,8 @@ function render() {
   if (dec.length) aiText += ' <b>' + dec.join(' ') + '</b>';
 
   const stand = P.compare.attitudes.map(a => esc(a.label) + ': ' + esc(a.text))
-    .concat(P.compare.challenges.map(c => 'Reports "' + esc(c.label.toLowerCase()) + '" as a challenge, which only ' + c.p + '% of ' + peers + ' do.'));
+    .concat(P.compare.challenges.map(c => 'Reports "' + esc(c.label.toLowerCase()) + '" as a challenge, which only ' + c.p + '% of ' + peers + ' do.'))
+    .concat(P.compare.noChallenges !== null ? ['Reports no challenges with skills-based hiring, which only ' + P.compare.noChallenges + '% of ' + peers + ' say. Check whether that means no barriers or no real attempt yet.'] : []);
 
   out.innerHTML =
     '<div class="p-head"><h1 class="p-org">' + esc(P.org) + '</h1><span class="p-date">Profile generated ' + esc(today) + '</span></div>' +
