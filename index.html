@@ -102,6 +102,13 @@ th { font-weight: 600; color: var(--muted); font-size: 13px; }
 td.dim { font-weight: 600; white-space: nowrap; width: 1%; }
 .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--soft); white-space: nowrap; }
 .badge.Ahead { color: var(--network); } .badge.Behind { color: var(--alert); }
+.badge.Opening { color: var(--growth); } .badge.Unusual { color: var(--deficit); }
+h4.sub { font: 600 14px/1.3 var(--sans); margin: 20px 0 2px; }
+table.tech th.num, table.tech td.num { text-align: right; white-space: nowrap; padding-right: 14px; }
+table.tech td.num { font-variant-numeric: tabular-nums; color: var(--muted); }
+table.tech td.num.hit { background: var(--soft); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--seg); }
+.st { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.st.now { color: var(--seg); } .st.future { color: var(--growth); } .st.no, .st.na, .st.notnow { color: var(--muted); }
 .foot { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 
 @media (max-width: 640px) {
@@ -248,6 +255,16 @@ const BENCH = {
     ['Testing or assessment platform', 'Testing platform', [41, 47, 39]],
     ['Paper or informal processes', 'Paper or informal', [49, 42, 32], 'unscored'],
   ],
+  /* Hiring technology plans (survey Q15, Figure 25): % of each mindset who would like to
+     use each tool in future, and % who do not use it and are not interested. */
+  techPlans: {
+    'Applicant tracking system (ATS)': { future: [41, 47, 35], no: [16, 3, 9] },
+    'HR information system (HRIS)': { future: [36, 32, 27], no: [13, 4, 6] },
+    'Dedicated recruiting or talent management software': { future: [48, 47, 52], no: [16, 5, 8] },
+    'Spreadsheets': { future: [24, 48, 24], no: [12, 6, 10] },
+    'Testing or assessment platform': { future: [47, 47, 51], no: [15, 12, 13] },
+    'Paper or informal processes': { future: [28, 32, 20], no: [25, 29, 50] },
+  },
   sourcing: [
     ['Employee referrals', 'Employee referrals', [61, 50, 62]],
     ['LinkedIn or other worker profile sites', 'LinkedIn or profile sites', [52, 57, 68]],
@@ -305,6 +322,32 @@ const BENCH = {
   context: { confident: [96, 91, 96], definesRoles: [40, 37, 58], earlyTurnover: [31, 38, 13], fastHire: [45, 21, 45] },
 };
 const SEG_INDEX = { network: 0, deficit: 1, growth: 2 };
+
+/* C12 grid: one row per tool, columns "Currently use", "Would like to use in future",
+   "Do not use / not interested". Row labels are matched loosely so small wording edits
+   in the form don't break the match. */
+const TECH_MATCH = [
+  /applicant tracking|\bATS\b/i,
+  /\bHRIS\b|information system/i,
+  /recruit|talent management/i,
+  /spreadsheet/i,
+  /paper|ad hoc|informal/i,
+  /testing|assessment platform/i,
+];
+function techIndex(label) {
+  for (let i = 0; i < TECH_MATCH.length; i++) {
+    const k = BENCH.tech.findIndex(t => TECH_MATCH[i].test(t[0]));
+    if (TECH_MATCH[i].test(label)) return k;
+  }
+  return -1;
+}
+function techStatus(cell) {
+  const v = cell || ''; const st = [];
+  if (/currently/i.test(v)) st.push('now');
+  if (/future|would like|start using/i.test(v)) st.push('future');
+  if (/not interested|do not use|don't use/i.test(v)) st.push('no');
+  return st;
+}
 
 const C11_MEASURES = [
   'Structured interviews (same questions, scored)',
@@ -372,11 +415,13 @@ function readResponses(text) {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new Error('This file has no responses. Download the "Form Responses 1" tab as a CSV and try again.');
   const header = rows[0];
-  const col = {}; const grid = [];
+  const col = {}; const grid = []; const techGrid = [];
   header.forEach((h, i) => {
     const m = h.match(/^(C\d+[a-z]?)\.\s/);
     if (!m) { if (/^timestamp$/i.test(h.trim())) col.Timestamp = i; return; }
-    if (m[1] === 'C9') grid.push({ i: i, text: (h.match(/\[(.*)\]\s*$/) || [])[1] || '' });
+    const bracket = (h.match(/\[(.*)\]\s*$/) || [])[1];
+    if (m[1] === 'C9') grid.push({ i: i, text: bracket || '' });
+    else if (m[1] === 'C12' && bracket) { const k = techIndex(bracket); if (k >= 0) techGrid.push({ i: i, k: k }); }
     else col[m[1]] = i;
   });
   if (col.C8 === undefined) throw new Error('This file is missing question C8 (the mindset question). Check that you downloaded the "Form Responses 1" tab from the questionnaire response sheet.');
@@ -388,6 +433,15 @@ function readResponses(text) {
       const g = grid.find(x => x.text.trim() === a[0]) || null;
       return g ? (r[g.i] || '').trim() : '';
     });
+    // C12: per-tool status. New grid version, or the older single checkbox question (current use only).
+    if (techGrid.length) {
+      rec.techVersion = 'grid';
+      rec.tech = BENCH.tech.map((t, k) => { const g = techGrid.find(x => x.k === k); return g ? techStatus(r[g.i]) : []; });
+    } else if (col.C12 !== undefined) {
+      rec.techVersion = 'checkbox';
+      const used = splitMulti(rec.C12, OPTIONS.C12).items;
+      rec.tech = BENCH.tech.map(t => (used.includes(t[0]) ? ['now'] : []));
+    } else { rec.techVersion = 'none'; rec.tech = BENCH.tech.map(() => []); }
     return rec;
   });
 }
@@ -424,7 +478,8 @@ function buildProfile(rec) {
   P.segment = S;
 
   const m = {};
-  ['C10', 'C11', 'C12', 'C14', 'C17', 'C18', 'C20'].forEach(k => { m[k] = splitMulti(rec[k], OPTIONS[k]); });
+  ['C10', 'C11', 'C14', 'C17', 'C18', 'C20'].forEach(k => { m[k] = splitMulti(rec[k], OPTIONS[k]); });
+  m.C12 = { items: BENCH.tech.filter((t, k) => rec.tech[k].includes('now')).map(t => t[0]), other: '' };
   ['C11', 'C17'].forEach(k => { if (m[k].items.length > 1) m[k].items = m[k].items.filter(x => x !== 'None of these'); });
   P.multi = m;
 
@@ -503,10 +558,16 @@ function buildProfile(rec) {
 
   // Step 7: peer comparison
   P.compare = {
-    tech: compareDimension(BENCH.tech, m.C12.items, m.C12.items.length > 0, si),
+    tech: compareDimension(BENCH.tech, m.C12.items,
+      rec.techVersion === 'grid' ? rec.tech.some(x => x.length) : m.C12.items.length > 0, si),
     sourcing: compareDimension(BENCH.sourcing, m.C10.items, m.C10.items.length > 0 || !!m.C10.other, si),
     assessment: compareDimension(BENCH.assessment, m.C11.items, !!rec.C11, si),
   };
+  P.tech = buildTech(rec, si, S.peers);
+  if (P.tech.openings.length) {
+    P.messaging.push({ kind: 'use', text: 'They plan to add ' + joinList(P.tech.openings.map(o => lc(o.short))) +
+      '. Offer to build skills lists and assessments into ' + (P.tech.openings.length === 1 ? 'it' : 'them') + ' from the start.' });
+  }
   const aiUses = m.C18.items.filter(x => x !== 'Not at this time');
   const expected = BENCH.ai.reduce((s, r) => s + r[2][si], 0) / 100;
   const aiAnswered = m.C18.items.length > 0;
@@ -550,9 +611,60 @@ function buildProfile(rec) {
   return P;
 }
 
+const lc = t => (/^[A-Z][A-Z]/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
+function joinList(a) {
+  return a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+}
+
+/* Hiring technology detail: for each tool, the client's status set against the share of
+   peers (same mindset) who use it now, want it in future, or are not interested. */
+function buildTech(rec, si, peers) {
+  const grid = rec.techVersion === 'grid';
+  const rows = BENCH.tech.map(([opt, short, nowPct, flag], k) => {
+    const plan = BENCH.techPlans[opt];
+    const p = { now: nowPct[si], future: plan.future[si], no: plan.no[si] };
+    const st = rec.tech[k];
+    const paper = flag === 'unscored';
+    let status = st.includes('now') ? 'now' : st.includes('future') ? 'future' : st.includes('no') ? 'no' : '';
+    if (!grid && !status && rec.techVersion === 'checkbox' && rec.C12) status = 'notnow';
+    let text = ''; let tag = '';
+    if (status === 'now') {
+      if (paper) text = 'Still relies on paper or informal steps, as ' + p.now + '% of ' + peers + ' do.';
+      else if (p.now >= 50) text = 'Like most ' + peers + ' (' + p.now + '% use it).';
+      else if (p.now < 30) { text = 'Ahead: only ' + p.now + '% of ' + peers + ' use it.'; tag = 'Ahead'; }
+      else text = 'In line: ' + p.now + '% of ' + peers + ' use it.';
+      if (st.includes('future') && !paper) text += ' Also plans to expand its use.';
+    } else if (status === 'future') {
+      if (paper) text = 'Wants to add informal steps; ' + p.future + '% of ' + peers + ' say the same.';
+      else {
+        tag = 'Opening';
+        text = (p.now >= 50 ? 'Wants what most ' + peers + ' already have (' + p.now + '% use it).'
+          : p.future >= 40 ? 'Shared interest: ' + p.future + '% of ' + peers + ' also want it.'
+            : 'Further ahead in plans than most: ' + p.future + '% of ' + peers + ' want it.');
+      }
+    } else if (status === 'no') {
+      if (paper) text = 'Does not use paper or informal steps, like ' + p.no + '% of ' + peers + '.';
+      else if (p.no < 10) {
+        tag = 'Unusual';
+        text = 'Only ' + p.no + '% of ' + peers + ' rule it out' + (p.now >= 50 ? ', and most (' + p.now + '%) use it.' : '.');
+      } else text = p.no + '% of ' + peers + ' are also not interested.';
+    } else if (status === 'notnow') {
+      text = 'Not in use now.';
+    } else text = 'Not answered.';
+    return { opt, short, status, p, text, tag, paper };
+  });
+  return {
+    grid: grid, version: rec.techVersion,
+    answered: rows.some(r => r.status && r.status !== 'notnow') || rec.techVersion === 'checkbox' && !!rec.C12,
+    rows: rows,
+    openings: rows.filter(r => r.tag === 'Opening'),
+    unusual: rows.filter(r => r.tag === 'Unusual'),
+  };
+}
+
 if (typeof module !== 'undefined') module.exports = { readResponses, buildProfile, parseCSV, splitMulti };
 
-const DEMO_CSV = "Timestamp,C0a. Organization name,C0b. Your name and email (optional),C1. What best describes your role?,C2. About how many full-time employees work at your organization?,C3. What type of organization is it?,C4. Industry,C5. Do some or all of your staff need to live within commuting distance of a workplace?,\"C6. About how many people do you hire per year (full-time, part-time or contract)?\",C7a. Thinking about your most recent hire: how many days from posting to accepted offer?,C7b. Most recent hire: about how many applicants?,C7c. Most recent hire: did this person leave within 6 months?,C8. Which ONE of these best describes you?,C9. How much do you agree with each statement? [I really only trust referrals for candidates.],C9. How much do you agree with each statement? [My personal assessment and knowledge of the role matter more than formal hiring processes.],C9. How much do you agree with each statement? [My most important qualification is that a candidate fits in with the team.],C9. How much do you agree with each statement? [I often fit a role to the candidate I like best.],C9. How much do you agree with each statement? [I expect to train new hires rather than hire someone who can already do the job.],C9. How much do you agree with each statement? [Removing degree requirements would improve my hiring outcomes.],C10. How do you find candidates? Select all that apply.,C11. Which tools do you use to assess candidates? Select all that apply.,C12. Which systems do you use to manage hiring? Select all that apply.,\"C13. \"\"I am confident in my organization's ability to assess candidates' skills with our current tools.\"\"\",C14. Which of these describe skills-based hiring? Select all that apply.,C15. Do you write down a list of the skills each role requires and use it to evaluate candidates?,C16. Do your job postings require a four-year degree?,C17. What do you think are the biggest challenges in using skills-based hiring? Select all that apply.,C17b. Which ONE of those is your biggest challenge?,C18. Do you use AI in hiring? Select all that apply.,\"C19. If AI helps make hiring decisions, who decides how it is used?\",C20. Which would be most useful to you? Select all that apply.\r\n11/22/2026 9:10:00,Rivera Landscaping,Luis Rivera,Company owner or principal,Fewer than 10,Sole proprietorship or partnership,Landscaping,\"Yes, all of them\",3\u20135,30\u201390,Under 10,No,I rely heavily on referrals for candidates.,Strongly agree,Strongly agree,Agree,Agree,Agree,Neutral,\"Employee referrals, Referrals from personal, professional or community networks\",\"Reference checks, Unstructured interviews\",\"Spreadsheets, Paper or informal processes\",Strongly agree,\"Evaluating candidates on demonstrated skills, Hiring people who fit the team's culture or personality\",No,No,\"Assessing skills effectively, Defining the skills a role requires\",Defining the skills a role requires,Not at this time,Not applicable,Connections to trusted partners who can widen my candidate pool\r\n11/22/2026 10:02:00,Harbor Logistics,Dana Kim,HR manager or HR staff,100\u2013249,Corporation,Transportation and warehousing,\"Yes, all of them\",10\u201399,Over 90,10\u201399,Yes,I have to work to sell my roles to whomever applies.,Agree,Neutral,Neutral,Agree,Strongly agree,Disagree,\"LinkedIn or other worker profile sites, Job boards, Company website, Contractor-to-full-time pipeline\",\"Background checks, Cognitive ability tests, Structured interviews (same questions, scored)\",HR information system (HRIS),Somewhat agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for some roles\",\"Yes, but we have not reviewed it in a while\",\"Limited budget for new assessment tools, Lack of internal resources or expertise, Resistance from leadership or owners\",Lack of internal resources or expertise,\"Developing interview questions, Conducting screening interviews\",Individual hiring managers,\"Low-cost or subsidized HR services, Help building promotion or upskilling paths for current staff\"\r\n11/22/2026 11:30:00,Brightline Analytics,Sam Ortiz,Hiring manager (not in HR),250\u2013499,Corporation,Professional services,No,10\u201399,Under 30,100\u2013500,No,\"I have developed my own specific processes (tools, techniques) to identify candidates.\",Disagree,Agree,Agree,Disagree,Neutral,Agree,\"Employee referrals, LinkedIn or other worker profile sites, Job boards, Company website, Recruiters or recruiting firms, Social media posts\",\"Background checks, Reference checks, Structured interviews (same questions, scored), Role-specific skills tests (e.g., coding, writing, task simulations), Work samples or assignments, AI-based screening or assessment tools\",\"Applicant tracking system (ATS), HR information system (HRIS), Spreadsheets, Testing or assessment platform\",Strongly agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for all roles\",No,\"Assessing skills effectively, Fitting it into our ATS or HR systems, Legal concerns\",Fitting it into our ATS or HR systems,\"It's built into tools we use, Parsing resumes, Ranking applicants\",HR,\"Evidence on the return on investment of hiring practices, Tools to define and assess the skills a role needs\"\r\n";
+const DEMO_CSV = "Timestamp,C0a. Organization name,C0b. Your name and email (optional),C1. What best describes your role?,C2. About how many full-time employees work at your organization?,C3. What type of organization is it?,C4. Industry,C5. Do some or all of your staff need to live within commuting distance of a workplace?,\"C6. About how many people do you hire per year (full-time, part-time or contract)?\",C7a. Thinking about your most recent hire: how many days from posting to accepted offer?,C7b. Most recent hire: about how many applicants?,C7c. Most recent hire: did this person leave within 6 months?,C8. Which ONE of these best describes you?,C9. How much do you agree with each statement? [I really only trust referrals for candidates.],C9. How much do you agree with each statement? [My personal assessment and knowledge of the role matter more than formal hiring processes.],C9. How much do you agree with each statement? [My most important qualification is that a candidate fits in with the team.],C9. How much do you agree with each statement? [I often fit a role to the candidate I like best.],C9. How much do you agree with each statement? [I expect to train new hires rather than hire someone who can already do the job.],C9. How much do you agree with each statement? [Removing degree requirements would improve my hiring outcomes.],C10. How do you find candidates? Select all that apply.,C11. Which tools do you use to assess candidates? Select all that apply.,\"C12. Which systems do you use to manage hiring, or want to start using? [Applicant tracking system (ATS)]\",\"C12. Which systems do you use to manage hiring, or want to start using? [HR information system (HRIS)]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Dedicated recruiting or talent management software]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Spreadsheets]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Paper or informal processes]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Testing or assessment platform]\",\"C12. Which systems do you use to manage hiring, or want to start using? [HR information system (HRIS)]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Dedicated recruiting or talent management software]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Spreadsheets]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Paper or informal processes]\",\"C12. Which systems do you use to manage hiring, or want to start using? [Testing or assessment platform]\",\"C13. \"\"I am confident in my organization's ability to assess candidates' skills with our current tools.\"\"\",C14. Which of these describe skills-based hiring? Select all that apply.,C15. Do you write down a list of the skills each role requires and use it to evaluate candidates?,C16. Do your job postings require a four-year degree?,C17. What do you think are the biggest challenges in using skills-based hiring? Select all that apply.,C17b. Which ONE of those is your biggest challenge?,C18. Do you use AI in hiring? Select all that apply.,\"C19. If AI helps make hiring decisions, who decides how it is used?\",C20. Which would be most useful to you? Select all that apply.\r\n11/22/2026 9:10:00,Rivera Landscaping,Luis Rivera,Company owner or principal,Fewer than 10,Sole proprietorship or partnership,Landscaping,\"Yes, all of them\",3–5,30–90,Under 10,No,I rely heavily on referrals for candidates.,Strongly agree,Strongly agree,Agree,Agree,Agree,Neutral,\"Employee referrals, Referrals from personal, professional or community networks\",\"Reference checks, Unstructured interviews\",Do not use / not interested,Would like to use in future,Do not use / not interested,Currently use,Currently use,Would like to use in future,Would like to use in future,Do not use / not interested,Currently use,Currently use,Would like to use in future,Strongly agree,\"Evaluating candidates on demonstrated skills, Hiring people who fit the team's culture or personality\",No,No,\"Assessing skills effectively, Defining the skills a role requires\",Defining the skills a role requires,Not at this time,Not applicable,Connections to trusted partners who can widen my candidate pool\r\n11/22/2026 10:02:00,Harbor Logistics,Dana Kim,HR manager or HR staff,100–249,Corporation,Transportation and warehousing,\"Yes, all of them\",10–99,Over 90,10–99,Yes,I have to work to sell my roles to whomever applies.,Agree,Neutral,Neutral,Agree,Strongly agree,Disagree,\"LinkedIn or other worker profile sites, Job boards, Company website, Contractor-to-full-time pipeline\",\"Background checks, Cognitive ability tests, Structured interviews (same questions, scored)\",Would like to use in future,Currently use,Do not use / not interested,Currently use,Do not use / not interested,Would like to use in future,Currently use,Do not use / not interested,Currently use,Do not use / not interested,Would like to use in future,Somewhat agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for some roles\",\"Yes, but we have not reviewed it in a while\",\"Limited budget for new assessment tools, Lack of internal resources or expertise, Resistance from leadership or owners\",Lack of internal resources or expertise,\"Developing interview questions, Conducting screening interviews\",Individual hiring managers,\"Low-cost or subsidized HR services, Help building promotion or upskilling paths for current staff\"\r\n11/22/2026 11:30:00,Brightline Analytics,Sam Ortiz,Hiring manager (not in HR),250–499,Corporation,Professional services,No,10–99,Under 30,100–500,No,\"I have developed my own specific processes (tools, techniques) to identify candidates.\",Disagree,Agree,Agree,Disagree,Neutral,Agree,\"Employee referrals, LinkedIn or other worker profile sites, Job boards, Company website, Recruiters or recruiting firms, Social media posts\",\"Background checks, Reference checks, Structured interviews (same questions, scored), Role-specific skills tests (e.g., coding, writing, task simulations), Work samples or assignments, AI-based screening or assessment tools\",Currently use,Currently use,Would like to use in future,Currently use,Do not use / not interested,Currently use,Currently use,Would like to use in future,Currently use,Do not use / not interested,Currently use,Strongly agree,\"Evaluating candidates on demonstrated skills, Using work samples, tasks or assessments, Placing less emphasis on degrees, Focusing on whether candidates can do the specific tasks of the role\",\"Yes, for all roles\",No,\"Assessing skills effectively, Fitting it into our ATS or HR systems, Legal concerns\",Fitting it into our ATS or HR systems,\"It's built into tools we use, Parsing resumes, Ranking applicants\",HR,\"Evidence on the return on investment of hiring practices, Tools to define and assess the skills a role needs\"\r\n";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -575,13 +687,38 @@ function load(text) {
 
 function list(items) { return '<ul>' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>'; }
 
-function compareRow(name, c, peers) {
+function compareRow(name, c, peers, extra) {
   let d = [];
   if (c.rating === 'Not answered') d.push('<span class="muted">Not answered.</span>');
   if (c.behind.length) d.push('Not using what most ' + peers + ' use: ' + c.behind.map(x => esc(x.label) + ' (' + x.p + '%)').join(', ') + '.');
   if (c.ahead.length) d.push('Uses what few ' + peers + ' use: ' + c.ahead.map(x => esc(x.label) + ' (' + x.p + '%)').join(', ') + '.');
   if (!d.length) d.push('Matches the common practices of ' + peers + '.');
+  if (extra) d.push(extra);
   return '<tr><td class="dim">' + name + '</td><td><span class="badge ' + c.rating.replace(' ', '') + '">' + c.rating + '</span></td><td>' + d.join(' ') + '</td></tr>';
+}
+
+const TECH_STATUS = { now: 'Currently uses', future: 'Wants to start', no: 'Not interested', notnow: 'Not in use', '': 'Not answered' };
+
+function techSection(T, S) {
+  const peers = S.peers;
+  const cell = (r, key) => '<td class="num' + (r.status === key ? ' hit' : '') + '">' + r.p[key] + '%</td>';
+  let notes = [];
+  if (T.openings.length) notes.push('<p><b>Openings:</b> wants to start using ' + esc(joinList(T.openings.map(o => lc(o.short)))) +
+    '. A tool they are about to adopt is the easiest place to build in skills lists and assessments' +
+    (T.openings.some(o => o.opt === 'Testing or assessment platform') ? '; their interest in a testing platform fits a matched assessment directly' : '') + '.</p>');
+  if (T.unusual.length) notes.push('<p><b>Ask why:</b> not interested in ' + esc(joinList(T.unusual.map(o => lc(o.short)))) +
+    ', which few ' + peers + ' rule out. Find out what is behind it (cost, a bad experience, no one to run it) before suggesting help that depends on ' +
+    (T.unusual.length === 1 ? 'that tool' : 'those tools') + '.</p>');
+  if (T.version === 'checkbox') notes.push('<p class="muted">This response comes from the earlier questionnaire, which asked only about current use. Ask about future plans in the intake call.</p>');
+  if (T.version === 'none' || !T.answered) notes.push('<p class="muted">Not answered. Ask which systems they use now and which they want to add.</p>');
+  return '<h4 class="sub">Hiring technology: now and next</h4>' +
+    '<p class="muted">Peer columns show the share of ' + esc(peers) + ' giving each answer; the shaded cell matches this client. Peers could pick more than one answer per tool, so rows can top 100%.</p>' +
+    '<div class="tbl-wrap"><table class="tech"><thead><tr><th>Tool</th><th>This client</th>' +
+    '<th class="num">Peers use now</th><th class="num">Peers want to add</th><th class="num">Peers not interested</th><th>What it means</th></tr></thead><tbody>' +
+    T.rows.map(r => '<tr><td class="dim">' + esc(r.short) + '</td><td><span class="st ' + (r.status || 'na') + '">' + TECH_STATUS[r.status] + '</span></td>' +
+      cell(r, 'now') + cell(r, 'future') + cell(r, 'no') +
+      '<td>' + (r.tag ? '<span class="badge ' + r.tag + '">' + r.tag + '</span> ' : '') + esc(r.text) + '</td></tr>').join('') +
+    '</tbody></table></div>' + notes.join('');
 }
 
 function render() {
@@ -640,11 +777,13 @@ function render() {
 
     '<section class="blk"><h3>Compared with other ' + peers + '</h3><div class="tbl-wrap"><table>' +
       '<thead><tr><th>Area</th><th>Rating</th><th>Details</th></tr></thead><tbody>' +
-      compareRow('Hiring technology', P.compare.tech, peers) +
+      compareRow('Hiring technology', P.compare.tech, peers,
+        P.tech.openings.length ? 'Plans to add ' + esc(joinList(P.tech.openings.map(o => lc(o.short)))) + ' (details below).' : '') +
       compareRow('Sourcing', P.compare.sourcing, peers) +
       compareRow('Assessment', P.compare.assessment, peers) +
       '<tr><td class="dim">AI use</td><td><span class="badge">' + ai.rating + '</span></td><td>' + aiText + '</td></tr>' +
       '</tbody></table></div>' +
+      techSection(P.tech, S) +
       '<p><b>Where they stand apart:</b> ' + (stand.length ? '</p>' + list(stand) : 'attitudes and challenges are in line with peers.</p>') +
       '<div class="tbl-wrap"><table><thead><tr><th>Context</th><th>This client</th><th>' + S.name + 's</th></tr></thead><tbody>' +
       P.context.map(c => '<tr><td>' + c.label + '</td><td>' + esc(c.client) + '</td><td>' + c.peers + '</td></tr>').join('') +
